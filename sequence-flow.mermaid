@@ -1,0 +1,59 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'actorBkg': '#1565C0', 'actorTextColor': '#fff', 'actorBorder': '#0D47A1', 'participantBkg': '#37474F', 'participantTextColor': '#fff', 'participantBorder': '#263238', 'noteBkgColor': '#455A64', 'noteTextColor': '#fff', 'noteBorderColor': '#37474F', 'activationBkgColor': '#546E7A', 'activationBorderColor': '#455A64', 'loopTextColor': '#fff' }}}%%
+sequenceDiagram
+    actor User
+    participant UI as Next.js + Zustand
+    participant API as API Server (Fastify)
+    participant PG as PostgreSQL
+    participant Redis as Redis
+    participant Worker as LLM Worker
+    participant Ollama as Ollama (qwen3:8b)
+
+    Note over User, Ollama: 📤 Phase 1 — User Sends Message
+
+    User->>UI: Types message, hits send
+    UI->>UI: Optimistic update via Zustand<br/>(show user message immediately)
+    UI->>API: POST /api/conversations/:id/messages<br/>{content: "Hello!"}
+    API->>PG: INSERT user message
+    API->>Redis: BullMQ enqueue job<br/>{conversationId, messages[]}
+    API-->>UI: 202 Accepted {messageId}
+
+    Note over User, Ollama: 🔌 Phase 2 — SSE Connection Opens
+
+    UI->>API: GET /api/conversations/:id/stream<br/>Accept: text/event-stream
+    API->>Redis: SUBSCRIBE stream:{conversationId}
+    Note over API: Connection held open,<br/>waiting for tokens
+
+    Note over User, Ollama: 🤖 Phase 3 — Worker Processes Job
+
+    Redis->>Worker: BRPOP job from queue
+    Worker->>PG: Fetch conversation history<br/>(for full context window)
+    Worker->>Worker: Build prompt from<br/>system prompt + history
+    Worker->>Ollama: POST /v1/chat/completions<br/>stream: true, messages: [...]
+
+    Note over User, Ollama: ⚡ Phase 4 — Token Streaming
+
+    loop For each token generated
+        Ollama-->>Worker: SSE chunk: {"delta": {"content": "Hi"}}
+        Worker->>Redis: PUBLISH stream:{convId} "Hi"
+        Redis-->>API: Message on subscribed channel
+        API-->>UI: SSE: data: {"token": "Hi"}
+        UI->>UI: Zustand: append to streamingContent
+        UI->>User: Re-render with new token
+    end
+
+    Note over User, Ollama: ✅ Phase 5 — Stream Complete
+
+    Ollama-->>Worker: SSE: [DONE]
+    Worker->>Redis: PUBLISH stream:{convId} "[DONE]"
+    Worker->>PG: INSERT assistant message<br/>(full concatenated response)
+    Redis-->>API: [DONE] signal
+    API-->>UI: SSE: data: {"done": true}
+    API->>Redis: UNSUBSCRIBE stream:{convId}
+    UI->>UI: Zustand: move streamingContent<br/>into messages array
+    UI->>UI: Set isStreaming = false
+
+    Note over User, Ollama: 🔄 Phase 6 — Cleanup
+
+    Note over Worker: Worker returns to<br/>polling queue for<br/>next job
+    Note over API: SSE connection closed
+    Note over Redis: Pub/Sub channel goes<br/>idle (no cleanup needed)

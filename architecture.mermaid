@@ -1,0 +1,88 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#37474F', 'primaryTextColor': '#fff', 'primaryBorderColor': '#263238', 'lineColor': '#90A4AE', 'secondaryColor': '#455A64', 'tertiaryColor': '#546E7A', 'clusterBkg': '#263238', 'clusterBorder': '#455A64', 'edgeLabelBackground': '#37474F' }}}%%
+graph TB
+    subgraph Client ["🖥️ Client (Next.js + Zustand)"]
+        UI[Chat UI]
+        Store[Zustand Store]
+        SSEClient[SSE Client]
+        UI <--> Store
+        SSEClient --> Store
+    end
+
+    subgraph APIServer ["⚙️ API Server (Fastify/Express)"]
+        Router[Router + Middleware]
+        Auth[Auth Middleware / JWT]
+        REST[REST Endpoints]
+        SSEEndpoint[SSE Streaming Endpoint]
+        QueueProducer[BullMQ Producer]
+        PubSubListener[Redis Pub/Sub Subscriber]
+
+        Router --> Auth
+        Auth --> REST
+        Auth --> SSEEndpoint
+        REST --> QueueProducer
+        SSEEndpoint --> PubSubListener
+    end
+
+    subgraph Worker ["🤖 LLM Worker Process"]
+        QueueConsumer[BullMQ Consumer]
+        PromptBuilder[Prompt Builder]
+        InferenceClient[Ollama HTTP Client]
+        PubSubPublisher[Redis Pub/Sub Publisher]
+        DBWriter[DB Writer]
+
+        QueueConsumer --> PromptBuilder
+        PromptBuilder --> InferenceClient
+        InferenceClient --> PubSubPublisher
+        InferenceClient --> DBWriter
+    end
+
+    subgraph Ollama ["🧠 Ollama (LLM Runtime)"]
+        OllamaAPI[OpenAI-Compatible API\nlocalhost:11434]
+        Model[qwen3:8b weights]
+        OllamaAPI --> Model
+    end
+
+    subgraph DataLayer ["💾 Data Layer"]
+        Postgres[(PostgreSQL)]
+        Redis[(Redis)]
+        RedisQueue[Job Queue\nBullMQ]
+        RedisPubSub[Pub/Sub Channels\nstream:convId]
+        RedisCache[Cache + Sessions]
+        Redis --- RedisQueue
+        Redis --- RedisPubSub
+        Redis --- RedisCache
+    end
+
+    %% Client <-> API Server
+    UI -- "HTTP POST\n/api/messages" --> Router
+    REST -- "JSON Response\nconversations, history" --> UI
+    SSEEndpoint -- "SSE: token stream\ntext/event-stream" --> SSEClient
+
+    %% API Server <-> Data Layer
+    REST -- "CRUD operations" --> Postgres
+    QueueProducer -- "Enqueue job\n{conversationId, messages}" --> RedisQueue
+    PubSubListener -- "SUBSCRIBE\nstream:convId" --> RedisPubSub
+    Auth -- "Session lookup" --> RedisCache
+
+    %% Worker <-> Data Layer
+    RedisQueue -- "BRPOP job" --> QueueConsumer
+    PubSubPublisher -- "PUBLISH token" --> RedisPubSub
+    DBWriter -- "Save complete\nresponse" --> Postgres
+    PromptBuilder -- "Fetch conversation\nhistory" --> Postgres
+
+    %% Worker <-> Ollama
+    InferenceClient -- "POST /v1/chat/completions\nstream: true" --> OllamaAPI
+    OllamaAPI -- "SSE: tokens" --> InferenceClient
+
+    %% Styling
+    classDef client fill:#1565C0,stroke:#0D47A1,stroke-width:2px,color:#fff
+    classDef api fill:#E65100,stroke:#BF360C,stroke-width:2px,color:#fff
+    classDef worker fill:#2E7D32,stroke:#1B5E20,stroke-width:2px,color:#fff
+    classDef ollama fill:#6A1B9A,stroke:#4A148C,stroke-width:2px,color:#fff
+    classDef data fill:#AD1457,stroke:#880E4F,stroke-width:2px,color:#fff
+
+    class UI,Store,SSEClient client
+    class Router,Auth,REST,SSEEndpoint,QueueProducer,PubSubListener api
+    class QueueConsumer,PromptBuilder,InferenceClient,PubSubPublisher,DBWriter worker
+    class OllamaAPI,Model ollama
+    class Postgres,Redis,RedisQueue,RedisPubSub,RedisCache data
