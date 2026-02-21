@@ -1,6 +1,11 @@
 import Image from "next/image";
+import { toast } from "sonner";
 import { Geist, Geist_Mono } from "next/font/google";
+import { useChatStore } from "../store/chat";
 import { useState } from "react";
+import { useConversationMessages, useConversations, useModels } from "@/hooks/api";
+import { useCreateConversation, useCreateMessage, useEditConversation } from "@/lib/api";
+import type { Message } from "@/types/api";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,100 +17,194 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-type Conversation = {
-  id: string;
-  title: string;
-};
 
 export default function Home() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const { data: models, isLoading } = useModels();
+  const {
+    selectedModel,
+    setSelectedModel,
+    activeConversationId: activeId,
+    setActiveConversationId: selectConversation,
+    updateConversation,
+  } = useChatStore();
+  const { data: conversations } = useConversations();
   const [editConversationId, setEditConversationId] = useState<string | null>(null);
-
-  const selectConversation = (id: string) => {
-    setActiveId(id);
+  const [editConversationTitle, setEditConversationTitle] = useState<string>('');
+  const { data: messages } = useConversationMessages(activeId);
+  const { trigger: createConversation, isMutating: isCreatingConversation, error: createConversationError } = useCreateConversation();
+  const { trigger: editConversation, isMutating: isEditingConversation, error: editConversationError } = useEditConversation();
+  const { trigger: createMessage, isMutating: isSendingMessage, error: createMessageError } = useCreateMessage(activeId);
+  const [newMessage, setNewMessage] = useState<string>('');
+  const startEditing = (c: { id: string; title: string }) => {
+    setEditConversationId(c.id);
+    setEditConversationTitle(c.title);
   };
 
-  const editConversationName = (id: string, title: string) => {
-    setConversations(conversations.map(c => c.id === id ? { ...c, title: title } : c));
+  const saveEdit = (id: string, title: string) => {
+    editConversation({ id, title })
+      .then(() => {
+        updateConversation(id, title);
+        setEditConversationId(null);
+      })
+      .catch(() => {});
   };
 
   return (
     <div
-      className={`${geistSans.className} ${geistMono.className} flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black`}
+      className={`${geistSans.className} ${geistMono.className} flex min-h-screen w-full flex-row bg-background font-sans`}
     >
-      <aside className="h-screen overflow-y-auto border-r border-gray-200 p-4">
-        <button className="bg-blue-500 text-white px-4 py-2 rounded-md" onClick={() => setConversations([...conversations, { id: crypto.randomUUID(), title: 'New Chat' }])}>New Chat</button>
-        <div className="mt-4 flex flex-col gap-1">
-          {conversations.map(c => (
-            <div 
-              key={c.id}
-              className={`p-2 rounded cursor-pointer flex gap-2 items-center justify-between ${
-                c.id === activeId ? 'bg-gray-200' : 'hover:bg-gray-100'
-              }`}
-              onClick={() => selectConversation(c.id)}
-            >
-              {editConversationId === c.id ? <input type="text" value={c.title} onChange={e => editConversationName(c.id, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { setEditConversationId(null); } }} /> : c.title}
-              {editConversationId === c.id ? <button className="bg-green-500 text-white px-2 py-1 rounded-md" onClick={() => setEditConversationId(null)}>Save</button> : <button className="bg-red-500 text-white px-2 py-1 rounded-md" onClick={() => setEditConversationId(c.id)}>Edit</button>}
-            </div>
+      <aside className="flex h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar p-4">
+      {isLoading ? (
+        <div className="flex flex-1 items-center justify-center py-12">
+          <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      ) : (
+        <select
+          className="w-full rounded-md border border-border bg-muted p-2 text-foreground"
+          onChange={e => setSelectedModel(e.target.value)}
+        >
+          <option value="">Select a model</option>
+          {models?.map(m => (
+            <option key={m.id} value={m.id}>{m.modelName}</option>
           ))}
+        </select>
+      )}
+        <button
+          className="bg-primary text-primary-foreground flex items-center gap-2 rounded-md px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isCreatingConversation}
+          onClick={() => {
+            if (!selectedModel) {
+              toast.error("Please select a model");
+              return;
+            }
+            createConversation({ model: selectedModel });
+          }}
+        >
+          {isCreatingConversation ? (
+            <>
+              <span className="inline-block size-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" aria-hidden />
+              Creating…
+            </>
+          ) : (
+            "New Chat"
+          )}
+        </button>
+        {createConversationError && (
+          <p className="mt-2 text-sm text-destructive" role="alert">
+            Failed to create conversation. Please try again.
+          </p>
+        )}
+        <div className="mt-4 flex flex-1 flex-col gap-1 overflow-hidden">
+          {!conversations ? (
+            <div className="flex flex-1 items-center justify-center py-8">
+              <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : (
+          conversations.map(c => (
+            <div
+              key={c.id}
+              className={`flex cursor-pointer items-center justify-between gap-2 rounded p-2 ${
+                c.id === activeId ? 'bg-sidebar-accent' : 'hover:bg-sidebar-accent'
+              }`}
+              onClick={() => editConversationId !== c.id && selectConversation(c.id)}
+            >
+              {editConversationId === c.id ? (
+                <input
+                  type="text"
+                  value={editConversationTitle}
+                  onChange={e => setEditConversationTitle(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') saveEdit(c.id, editConversationTitle);
+                  }}
+                  className="border-input bg-background text-foreground flex-1 min-w-0 rounded border px-2 py-1"
+                  onClick={e => e.stopPropagation()}
+                />
+              ) : (
+                <span className="flex-1 truncate text-sidebar-foreground">{c.title}</span>
+              )}
+              {editConversationId === c.id ? (
+                <button
+                  className="bg-primary text-primary-foreground flex shrink-0 items-center gap-1 rounded px-2 py-1 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isEditingConversation}
+                  onClick={e => {
+                    e.stopPropagation();
+                    saveEdit(c.id, editConversationTitle);
+                  }}
+                >
+                  {isEditingConversation ? (
+                    <>
+                      <span className="inline-block size-3 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" aria-hidden />
+                      Saving…
+                    </>
+                  ) : (
+                    'Save'
+                  )}
+                </button>
+              ) : (
+                <button
+                  className="bg-destructive text-destructive-foreground shrink-0 rounded px-2 py-1"
+                  onClick={e => {
+                    e.stopPropagation();
+                    startEditing(c);
+                  }}
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+          ))
+          )}
+          {editConversationError && (
+            <p className="mt-2 text-sm text-destructive" role="alert">
+              Failed to edit conversation. Please try again.
+            </p>
+          )}
         </div>
       </aside>
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the index.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+      <main className="min-w-0 flex-1 overflow-auto bg-background flex flex-col">
+        {/* Conversation Name in header */}
+        {activeId && (
+          <h1 className="text-2xl font-bold">{conversations?.find(c => c.id === activeId)?.title}</h1>
+        )}
+        {/* Put them into text bubbles left or right aligned based on the role */}
+        {/* this should take up most of the screen and push the input to the bottom */}
+        <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
+        {messages?.map(m => (
+          <div key={m.id} className={`${m.role === 'user' ? 'text-right' : 'text-left'}`}>
+            <p>{m.content}</p>
+          </div>
+        ))}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs/pages/getting-started?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Text input for new message and send button */}
+        <div className="flex flex-row gap-2">
+          <input type="text" className="flex-1 rounded-md border border-border bg-muted p-2 text-foreground" value={newMessage} onChange={e => setNewMessage(e.target.value)} />
+            <button className="bg-primary text-primary-foreground rounded-md px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60" disabled={isSendingMessage} onClick={() => {
+              if (!newMessage) {
+                toast.error("Please enter a message");
+                return;
+              }
+              if (!activeId) {
+                toast.error("Please select a conversation");
+                return;
+              }
+              createMessage({ content: newMessage }, {
+                optimisticData: (current?: Message[]) => [
+                  ...(current ?? []),
+                  {
+                    id: `temp-${Date.now()}`,
+                    conversationId: activeId,
+                    role: 'user' as const,
+                    content: newMessage,
+                    createdAt: new Date().toISOString(),
+                  },
+                ],
+                rollbackOnError: true,
+              });
+              setNewMessage('');
+            }}>
+              Send
+          </button>
         </div>
       </main>
     </div>
