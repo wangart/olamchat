@@ -109,6 +109,8 @@ export default function Home() {
   }, [messages]);
 
   const activeConversation = conversations?.find((c) => c.id === activeId);
+  const isWaitingForResponse =
+    !!messages && messages.length > 0 && messages[messages.length - 1].role === "user";
 
   return (
     <div
@@ -311,9 +313,10 @@ export default function Home() {
                 <div className="relative flex-1">
                   <input
                     type="text"
-                    placeholder="Type a message…"
-                    className="w-full rounded-xl border border-white/[.1] bg-white/[.04] px-4 py-3 text-[14px] text-white placeholder:text-white/30 transition focus:border-violet-500/40 focus:bg-white/[.06] focus:outline-none"
+                    placeholder={isWaitingForResponse ? "Waiting for response…" : "Type a message…"}
+                    className="w-full rounded-xl border border-white/[.1] bg-white/[.04] px-4 py-3 text-[14px] text-white placeholder:text-white/30 transition focus:border-violet-500/40 focus:bg-white/[.06] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                     value={newMessage}
+                    disabled={isWaitingForResponse}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
@@ -325,10 +328,10 @@ export default function Home() {
                 </div>
                 <button
                   className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={isSendingMessage || !newMessage.trim()}
+                  disabled={isSendingMessage || isWaitingForResponse || !newMessage.trim()}
                   onClick={handleSend}
                 >
-                  {isSendingMessage ? (
+                  {isSendingMessage || isWaitingForResponse ? (
                     <Loader2Icon className="size-4.5 animate-spin" />
                   ) : (
                     <SendHorizontalIcon className="size-4.5" />
