@@ -1,10 +1,10 @@
-import { toast } from "sonner";
-import { Geist, Geist_Mono } from "next/font/google";
-import { useChatStore } from "../store/chat";
-import { useEffect, useRef, useState } from "react";
-import { useConversationMessages, useConversations, useModels } from "@/hooks/api";
-import { useCreateConversation, useCreateMessage, useEditConversation } from "@/lib/api";
-import type { Message } from "@/types/api";
+import { toast } from 'sonner'
+import { Geist, Geist_Mono } from 'next/font/google'
+import { useChatStore } from '../store/chat'
+import { useEffect, useRef, useState } from 'react'
+import { useConversationMessages, useConversations, useModels } from '@/hooks/api'
+import { logout, useCreateConversation, useCreateMessage, useEditConversation } from '@/lib/api'
+import type { Message } from '@/types/api'
 import {
   MessageSquarePlusIcon,
   SendHorizontalIcon,
@@ -15,75 +15,75 @@ import {
   SparklesIcon,
   Loader2Icon,
   ChevronDownIcon,
-} from "lucide-react";
+} from 'lucide-react'
+import { useStream } from '@/hooks/stream'
 
 const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+  variable: '--font-geist-sans',
+  subsets: ['latin'],
+})
 
 const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
+})
 
 export default function Home() {
-  const { data: models, isLoading } = useModels();
+  const { data: models, isLoading } = useModels()
   const {
     selectedModel,
     setSelectedModel,
     activeConversationId: activeId,
     setActiveConversationId: selectConversation,
     updateConversation,
-  } = useChatStore();
-  const { data: conversations } = useConversations();
-  const [editConversationId, setEditConversationId] = useState<string | null>(null);
-  const [editConversationTitle, setEditConversationTitle] = useState<string>("");
-  const { data: messages } = useConversationMessages(activeId);
+    streamingContent,
+  } = useChatStore()
+  const { data: conversations } = useConversations()
+  const { startStream, isStreaming } = useStream(activeId)
+  const [editConversationId, setEditConversationId] = useState<string | null>(null)
+  const [editConversationTitle, setEditConversationTitle] = useState<string>('')
+  const { data: messages } = useConversationMessages(activeId)
   const {
     trigger: createConversation,
     isMutating: isCreatingConversation,
     error: createConversationError,
-  } = useCreateConversation();
+  } = useCreateConversation()
   const {
     trigger: editConversation,
     isMutating: isEditingConversation,
     error: editConversationError,
-  } = useEditConversation();
-  const {
-    trigger: createMessage,
-    isMutating: isSendingMessage,
-  } = useCreateMessage(activeId);
-  const [newMessage, setNewMessage] = useState<string>("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  } = useEditConversation()
+  const { trigger: createMessage, isMutating: isSendingMessage } = useCreateMessage(activeId)
+  const [newMessage, setNewMessage] = useState<string>('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const startEditing = (c: { id: string; title: string }) => {
-    setEditConversationId(c.id);
-    setEditConversationTitle(c.title);
-  };
+    setEditConversationId(c.id)
+    setEditConversationTitle(c.title)
+  }
 
   const cancelEditing = () => {
-    setEditConversationId(null);
-    setEditConversationTitle("");
-  };
+    setEditConversationId(null)
+    setEditConversationTitle('')
+  }
 
   const saveEdit = (id: string, title: string) => {
     editConversation({ id, title })
       .then(() => {
-        updateConversation(id, title);
-        setEditConversationId(null);
+        updateConversation(id, title)
+        setEditConversationId(null)
       })
-      .catch(() => {});
-  };
+      .catch(() => {})
+  }
 
   const handleSend = () => {
     if (!newMessage.trim()) {
-      toast.error("Please enter a message");
-      return;
+      toast.error('Please enter a message')
+      return
     }
     if (!activeId) {
-      toast.error("Please select a conversation");
-      return;
+      toast.error('Please select a conversation')
+      return
     }
     createMessage(
       { content: newMessage },
@@ -93,24 +93,25 @@ export default function Home() {
           {
             id: `temp-${Date.now()}`,
             conversationId: activeId,
-            role: "user" as const,
+            role: 'user' as const,
             content: newMessage,
             createdAt: new Date().toISOString(),
           },
         ],
         rollbackOnError: true,
-      }
-    );
-    setNewMessage("");
-  };
+      },
+    )
+    startStream()
+    setNewMessage('')
+  }
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, streamingContent])
 
-  const activeConversation = conversations?.find((c) => c.id === activeId);
+  const activeConversation = conversations?.find((c) => c.id === activeId)
   const isWaitingForResponse =
-    !!messages && messages.length > 0 && messages[messages.length - 1].role === "user";
+    !!messages && messages.length > 0 && messages[messages.length - 1].role === 'user'
 
   return (
     <div
@@ -123,9 +124,7 @@ export default function Home() {
           <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600">
             <SparklesIcon className="size-4 text-white" />
           </div>
-          <span className="text-[15px] font-semibold tracking-tight text-white">
-            Olamchat
-          </span>
+          <span className="text-[15px] font-semibold tracking-tight text-white">Olamchat</span>
         </div>
 
         {/* Model selector */}
@@ -138,7 +137,7 @@ export default function Home() {
             <div className="relative">
               <select
                 className="w-full cursor-pointer appearance-none rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-2 pr-8 text-[13px] text-white/70 transition hover:border-white/[.15] hover:bg-white/[.06] focus:border-violet-500/50 focus:outline-none"
-                value={selectedModel ?? ""}
+                value={selectedModel ?? ''}
                 onChange={(e) => setSelectedModel(e.target.value)}
               >
                 <option value="">Select a model</option>
@@ -160,10 +159,10 @@ export default function Home() {
             disabled={isCreatingConversation}
             onClick={() => {
               if (!selectedModel) {
-                toast.error("Please select a model first");
-                return;
+                toast.error('Please select a model first')
+                return
               }
-              createConversation({ model: selectedModel });
+              createConversation({ model: selectedModel })
             }}
           >
             {isCreatingConversation ? (
@@ -171,7 +170,7 @@ export default function Home() {
             ) : (
               <MessageSquarePlusIcon className="size-4" />
             )}
-            {isCreatingConversation ? "Creating…" : "New Chat"}
+            {isCreatingConversation ? 'Creating…' : 'New Chat'}
           </button>
           {createConversationError && (
             <p className="mt-2 text-xs text-red-400" role="alert">
@@ -190,21 +189,17 @@ export default function Home() {
               <Loader2Icon className="size-5 animate-spin text-white/30" />
             </div>
           ) : conversations.length === 0 ? (
-            <p className="py-8 text-center text-xs text-white/30">
-              No conversations yet
-            </p>
+            <p className="py-8 text-center text-xs text-white/30">No conversations yet</p>
           ) : (
             conversations.map((c) => (
               <div
                 key={c.id}
                 className={`group flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${
                   c.id === activeId
-                    ? "bg-white/[.08] text-white"
-                    : "text-white/60 hover:bg-white/[.04] hover:text-white/80"
+                    ? 'bg-white/[.08] text-white'
+                    : 'text-white/60 hover:bg-white/[.04] hover:text-white/80'
                 }`}
-                onClick={() =>
-                  editConversationId !== c.id && selectConversation(c.id)
-                }
+                onClick={() => editConversationId !== c.id && selectConversation(c.id)}
               >
                 <MessageCircleIcon className="size-4 shrink-0 opacity-50" />
                 {editConversationId === c.id ? (
@@ -217,9 +212,8 @@ export default function Home() {
                       value={editConversationTitle}
                       onChange={(e) => setEditConversationTitle(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter")
-                          saveEdit(c.id, editConversationTitle);
-                        if (e.key === "Escape") cancelEditing();
+                        if (e.key === 'Enter') saveEdit(c.id, editConversationTitle)
+                        if (e.key === 'Escape') cancelEditing()
                       }}
                       className="min-w-0 flex-1 rounded-md border border-white/[.15] bg-white/[.06] px-2 py-1 text-[13px] text-white placeholder:text-white/30 focus:border-violet-500/50 focus:outline-none"
                       autoFocus
@@ -244,14 +238,12 @@ export default function Home() {
                   </div>
                 ) : (
                   <>
-                    <span className="flex-1 truncate text-[13px]">
-                      {c.title}
-                    </span>
+                    <span className="flex-1 truncate text-[13px]">{c.title}</span>
                     <button
                       className="rounded-md p-1 text-white/0 transition group-hover:text-white/40 hover:!text-white/70 hover:bg-white/[.08]"
                       onClick={(e) => {
-                        e.stopPropagation();
-                        startEditing(c);
+                        e.stopPropagation()
+                        startEditing(c)
                       }}
                     >
                       <PencilIcon className="size-3.5" />
@@ -267,6 +259,12 @@ export default function Home() {
             </p>
           )}
         </div>
+        <button
+          className="m-3 px-3 py-2 text-xs text-white/40 transition hover:text-white/70"
+          onClick={logout}
+        >
+          Logout
+        </button>
       </aside>
 
       {/* ── Main Content ── */}
@@ -276,7 +274,7 @@ export default function Home() {
             {/* Header */}
             <header className="flex shrink-0 items-center border-b border-white/[.06] px-6 py-4">
               <h1 className="text-[15px] font-medium text-white/90">
-                {activeConversation?.title ?? "Conversation"}
+                {activeConversation?.title ?? 'Conversation'}
               </h1>
             </header>
 
@@ -291,19 +289,26 @@ export default function Home() {
               {messages?.map((m) => (
                 <div
                   key={m.id}
-                  className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} mb-3`}
+                  className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} mb-3`}
                 >
                   <div
                     className={`max-w-[70%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed ${
-                      m.role === "user"
-                        ? "rounded-br-md bg-violet-600 text-white"
-                        : "rounded-bl-md bg-white/[.06] text-white/85"
+                      m.role === 'user'
+                        ? 'rounded-br-md bg-violet-600 text-white'
+                        : 'rounded-bl-md bg-white/[.06] text-white/85'
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{m.content}</p>
                   </div>
                 </div>
               ))}
+              {isStreaming && streamingContent && (
+                <div className="flex justify-start mb-3">
+                  <div className="max-w-[70%] rounded-2xl rounded-bl-md bg-white/[.06] text-white/85 px-4 py-3 text-[14px] leading-relaxed">
+                    <p className="whitespace-pre-wrap">{streamingContent}</p>
+                  </div>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
 
@@ -313,15 +318,15 @@ export default function Home() {
                 <div className="relative flex-1">
                   <input
                     type="text"
-                    placeholder={isWaitingForResponse ? "Waiting for response…" : "Type a message…"}
+                    placeholder={isWaitingForResponse ? 'Waiting for response…' : 'Type a message…'}
                     className="w-full rounded-xl border border-white/[.1] bg-white/[.04] px-4 py-3 text-[14px] text-white placeholder:text-white/30 transition focus:border-violet-500/40 focus:bg-white/[.06] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                     value={newMessage}
                     disabled={isWaitingForResponse}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSend()
                       }
                     }}
                   />
@@ -347,9 +352,7 @@ export default function Home() {
               <SparklesIcon className="size-8 text-violet-400" />
             </div>
             <div className="text-center">
-              <h2 className="text-lg font-semibold text-white/90">
-                Welcome to Olamchat
-              </h2>
+              <h2 className="text-lg font-semibold text-white/90">Welcome to Olamchat</h2>
               <p className="mt-1 text-sm text-white/40">
                 Select a conversation or create a new one to get started.
               </p>
@@ -358,5 +361,5 @@ export default function Home() {
         )}
       </main>
     </div>
-  );
+  )
 }

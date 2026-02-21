@@ -6,6 +6,19 @@
       "runtimeExecutable": "bun",
       "runtimeArgs": ["--cwd", "frontend", "dev"],
       "port": 3000
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["--cwd", "backend", "dev"],
+      "port": 3001,
+      "autoPort": false
+    },
+    {
+      "name": "worker",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["--cwd", "worker", "dev"],
+      "port": 3002
     }
   ]
 }

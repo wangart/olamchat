@@ -1,91 +1,116 @@
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { getUserConversations, createConversation, editConversation, deleteConversation, getConversationMessages } from '../services/conversations.service'
+import {
+  getUserConversations,
+  createConversation,
+  editConversation,
+  deleteConversation,
+  getConversationMessages,
+} from '../services/conversations.service'
 import { createMessage } from '../services/messages.service'
 
 const conversationRoutes: FastifyPluginAsync = async (app) => {
-
   // ─── GET /api/conversations ──────────────────────────
   app.get('/', async (request) => {
-    return getUserConversations()
+    return getUserConversations(request.user.sub)
   })
 
   // ─── POST /api/conversations ─────────────────────────
   app.post<{
     Body: { model: string }
-  }>('/', {
-    schema: {
-      body: z.object({
-        model: z.string().min(1),
-      }),
+  }>(
+    '/',
+    {
+      schema: {
+        body: z.object({
+          model: z.string().min(1),
+        }),
+      },
     },
-  }, async (request, reply) => {
-    const conv = await createConversation(request.body.model)
-    reply.code(201)
-    return conv
-  })
+    async (request, reply) => {
+      const conv = await createConversation(request.user.sub, request.body.model)
+      reply.code(201)
+      return conv
+    },
+  )
 
   // ─── PUT /api/conversations/:id ──────────────────────
   app.put<{
     Params: { id: string }
     Body: { title: string }
-  }>('/:id', {
-    schema: {
-      params: z.object({
-        id: z.string().uuid(),
-      }),
-      body: z.object({
-        title: z.string().min(1),
-      }),
+  }>(
+    '/:id',
+    {
+      schema: {
+        params: z.object({
+          id: z.string().uuid(),
+        }),
+        body: z.object({
+          title: z.string().min(1),
+        }),
+      },
     },
-  }, async (request) => {
-    return editConversation(request.params.id, request.body.title)
-  })
+    async (request) => {
+      return editConversation(request.user.sub, request.params.id, request.body.title)
+    },
+  )
 
   // ─── GET /api/conversations/:id/messages ─────────────
   app.get<{
     Params: { id: string }
-  }>('/:id/messages', {
-    schema: {
-      params: z.object({
-        id: z.string().uuid(),
-      }),
+  }>(
+    '/:id/messages',
+    {
+      schema: {
+        params: z.object({
+          id: z.string().uuid(),
+        }),
+      },
     },
-  }, async (request) => {
-    return getConversationMessages(request.params.id)
-  })
+    async (request) => {
+      return getConversationMessages(request.user.sub, request.params.id)
+    },
+  )
 
   // ─── POST /api/conversations/:id/messages ─────────────
   app.post<{
     Params: { id: string }
     Body: { content: string }
-  }>('/:id/messages', {
-    schema: {
-      params: z.object({
-        id: z.string().uuid(),
-      }),
-      body: z.object({
-        content: z.string().min(1),
-      }),
+  }>(
+    '/:id/messages',
+    {
+      schema: {
+        params: z.object({
+          id: z.string().uuid(),
+        }),
+        body: z.object({
+          content: z.string().min(1),
+        }),
+      },
     },
-  }, async (request, reply) => {
-    const msg = await createMessage(request.params.id, request.body.content)
-    reply.code(201)
-    return msg
-  })
+    async (request, reply) => {
+      const msg = await createMessage(request.user.sub, request.params.id, request.body.content)
+      reply.code(201)
+      return msg
+    },
+  )
 
   // ─── DELETE /api/conversations/:id ───────────────────
   app.delete<{
     Params: { id: string }
-  }>('/:id', {
-    schema: {
-      params: z.object({
-        id: z.string().uuid(),
-      }),
+  }>(
+    '/:id',
+    {
+      schema: {
+        params: z.object({
+          id: z.string().uuid(),
+        }),
+      },
     },
-  }, async (request) => {
-    return deleteConversation(request.params.id)
-  })
+    async (request) => {
+      return deleteConversation(request.user.sub, request.params.id)
+    },
+  )
 }
 
 export default conversationRoutes

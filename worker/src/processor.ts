@@ -1,8 +1,9 @@
 import { eq, asc } from 'drizzle-orm'
 import { db } from './db'
 import { messages, conversations } from '../../backend/src/db/schema'
-import { chatCompletion } from './ollama'
+import { chatCompletionStream } from './ollama'
 import type { Job } from 'bullmq'
+import { publishToken, publishDone } from './redis'
 
 export interface InferenceJobData {
   conversationId: string
@@ -45,10 +46,17 @@ export async function processInferenceJob(job: Job<InferenceJobData>) {
     })
   }
 
-  // 4. Call Ollama
+  // 4. Stream from Ollama, publishing each token to Redis
   const model = 'qwen3:8b'
-  console.log(`[worker] Calling Ollama with ${promptMessages.length} messages, model: ${model}`)
-  const assistantContent = await chatCompletion(model, promptMessages)
+  console.log(
+    `[worker] Streaming from Ollama with ${promptMessages.length} messages, model: ${model}`,
+  )
+  const assistantContent = await chatCompletionStream(model, promptMessages, (token) =>
+    publishToken(conversationId, token),
+  )
+
+  // 5. Signal completion
+  publishDone(conversationId)
 
   // 5. Save the assistant response
   const [saved] = await db
