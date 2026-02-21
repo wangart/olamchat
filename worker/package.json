@@ -1,0 +1,22 @@
+{
+  "name": "worker",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "tsx": "^4.21.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "bullmq": "^5.70.0",
+    "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.45.1",
+    "postgres": "^3.4.8"
+  }
+}
