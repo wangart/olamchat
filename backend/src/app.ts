@@ -10,6 +10,7 @@ import streamRoutes from './routes/stream'
 import jwtPlugin from './plugins/jwt'
 import authPlugin from './plugins/auth'
 import authRoutes from './routes/auth'
+import rateLimitPlugin from './plugins/rate-limit'
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -22,6 +23,7 @@ export async function buildApp() {
   await app.register(redisPlugin)
   await app.register(jwtPlugin)
   await app.register(authPlugin)
+  await app.register(rateLimitPlugin)
 
   await app.register(authRoutes, { prefix: '/api/auth' })
   await app.register(modelRoutes, { prefix: '/api/models' })
@@ -36,7 +38,15 @@ export async function buildApp() {
     { prefix: '' },
   )
 
-  app.get('/health', async () => ({ status: 'ok' }))
+  app.get(
+    '/health',
+    {
+      config: {
+        rateLimit: false,
+      },
+    },
+    async () => ({ status: 'ok' }),
+  )
 
   return app
 }

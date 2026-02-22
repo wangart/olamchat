@@ -6,6 +6,7 @@ import {
   editConversation,
   deleteConversation,
   getConversationMessages,
+  updateConversationSettings,
 } from '../services/conversations.service'
 import { createMessage } from '../services/messages.service'
 
@@ -79,6 +80,12 @@ const conversationRoutes: FastifyPluginAsync = async (app) => {
   }>(
     '/:id/messages',
     {
+      config: {
+        rateLimit: {
+          max: 20,
+          timeWindow: '1 minute',
+        },
+      },
       schema: {
         params: z.object({
           id: z.string().uuid(),
@@ -92,6 +99,29 @@ const conversationRoutes: FastifyPluginAsync = async (app) => {
       const msg = await createMessage(request.user.sub, request.params.id, request.body.content)
       reply.code(201)
       return msg
+    },
+  )
+
+  // ─── PATCH /api/conversations/:id/settings ───────────
+  app.patch<{
+    Params: { id: string }
+    Body: { systemPrompt?: string | null; temperature?: number; maxTokens?: number }
+  }>(
+    '/:id/settings',
+    {
+      schema: {
+        params: z.object({
+          id: z.string().uuid(),
+        }),
+        body: z.object({
+          systemPrompt: z.string().nullable().optional(),
+          temperature: z.number().min(0).max(2).optional(),
+          maxTokens: z.number().int().min(1).max(16384).optional(),
+        }),
+      },
+    },
+    async (request) => {
+      return updateConversationSettings(request.user.sub, request.params.id, request.body)
     },
   )
 

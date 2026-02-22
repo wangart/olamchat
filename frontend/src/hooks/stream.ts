@@ -1,13 +1,16 @@
 import { useRef } from 'react'
+import { toast } from 'sonner'
 import { useChatStore } from '@/store/chat'
 import { API_URL } from '@/constants'
-import { useConversationMessages } from './api'
+import { useConversationMessages, useConversations } from './api'
 import { authFetch } from '@/lib/fetch'
 
 export function useStream(conversationId: string | null) {
   const { appendToken, clearStreaming, setIsStreaming, isStreaming } = useChatStore()
   const { mutate } = useConversationMessages(conversationId)
+  const { mutate: mutateConversations } = useConversations()
   const abortRef = useRef<AbortController | null>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const startStream = async () => {
     if (!conversationId || abortRef.current) return
@@ -16,6 +19,14 @@ export function useStream(conversationId: string | null) {
 
     const controller = new AbortController()
     abortRef.current = controller
+
+    // Timeout if no response within 30 seconds
+    timeoutRef.current = setTimeout(() => {
+      if (abortRef.current) {
+        toast.error('Response timed out')
+        stopStream()
+      }
+    }, 30000)
 
     try {
       const res = await authFetch(`${API_URL}/api/conversations/${conversationId}/stream`, {
@@ -34,6 +45,12 @@ export function useStream(conversationId: string | null) {
         const { done, value } = await reader.read()
         if (done) break
 
+        // Clear timeout on first data received
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current)
+          timeoutRef.current = null
+        }
+
         buffer += decoder.decode(value, { stream: true })
 
         // SSE format: "data: {...}\n\n"
@@ -46,10 +63,18 @@ export function useStream(conversationId: string | null) {
 
           const data = JSON.parse(trimmed.slice(6))
 
+          if (data.error) {
+            toast.error(`Generation failed: ${data.error}`)
+            abortRef.current = null
+            clearStreaming()
+            return
+          }
+
           if (data.done) {
             abortRef.current = null
             clearStreaming()
             mutate()
+            mutateConversations()
             return
           }
 
@@ -64,12 +89,20 @@ export function useStream(conversationId: string | null) {
         console.error('[stream] Error:', err.message)
       }
     } finally {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
       abortRef.current = null
       if (isStreaming) clearStreaming()
     }
   }
 
   const stopStream = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
     abortRef.current?.abort()
     abortRef.current = null
     clearStreaming()

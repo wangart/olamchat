@@ -10,4 +10,8 @@ export function publishDone(conversationId: string) {
   redis.publish(`stream:${conversationId}`, JSON.stringify({ done: true }))
 }
 
+export function publishError(conversationId: string, message: string) {
+  redis.publish(`stream:${conversationId}`, JSON.stringify({ error: message }))
+}
+
 export { redis }

@@ -33,6 +33,19 @@ export async function deleteConversation(userId: string, conversationId: string)
     .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
 }
 
+export async function updateConversationSettings(
+  userId: string,
+  conversationId: string,
+  settings: { systemPrompt?: string | null; temperature?: number; maxTokens?: number },
+) {
+  const [conv] = await db
+    .update(conversations)
+    .set(settings)
+    .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
+    .returning({ id: conversations.id })
+  return conv
+}
+
 export async function getConversationMessages(userId: string, conversationId: string) {
   // Verify ownership
   const [conv] = await db

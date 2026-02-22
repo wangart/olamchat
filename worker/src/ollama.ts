@@ -32,10 +32,16 @@ export async function chatCompletion(model: string, messages: ChatMessage[]): Pr
   return data.choices[0].message.content
 }
 
+interface ChatOptions {
+  temperature?: number
+  maxTokens?: number
+}
+
 export async function chatCompletionStream(
   model: string,
   messages: ChatMessage[],
   onToken: (token: string) => void,
+  options: ChatOptions = {},
 ): Promise<string> {
   const res = await fetch(`${OLLAMA_URL}/v1/chat/completions`, {
     method: 'POST',
@@ -44,6 +50,8 @@ export async function chatCompletionStream(
       model,
       messages,
       stream: true,
+      temperature: options.temperature ?? 0.7,
+      max_tokens: options.maxTokens ?? 2048,
     }),
   })
 

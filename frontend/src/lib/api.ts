@@ -24,6 +24,7 @@ export async function login(email: string, password: string): Promise<AuthRespon
   const data: AuthResponse = await res.json()
   localStorage.setItem('token', data.token)
   localStorage.setItem('user', JSON.stringify(data.user))
+  window.dispatchEvent(new Event('storage'))
   return data
 }
 
@@ -40,6 +41,7 @@ export async function signup(email: string, password: string): Promise<AuthRespo
   const data: AuthResponse = await res.json()
   localStorage.setItem('token', data.token)
   localStorage.setItem('user', JSON.stringify(data.user))
+  window.dispatchEvent(new Event('storage'))
   return data
 }
 
@@ -79,6 +81,8 @@ export function useCreateConversation() {
           modelId: null,
           systemPrompt: null,
           userId: '',
+          temperature: 0.7,
+          maxTokens: 2048,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
@@ -125,6 +129,24 @@ export function useDeleteConversation() {
     {
       onSuccess: () => mutate(CONVERSATIONS_KEY),
       onError: () => mutate(CONVERSATIONS_KEY),
+    },
+  )
+}
+
+export function useUpdateConversationSettings(conversationId: string | null) {
+  return useSWRMutation(
+    conversationId ? `${API_URL}/api/conversations/${conversationId}/settings` : null,
+    async (
+      url: string,
+      { arg }: { arg: { systemPrompt?: string | null; temperature?: number; maxTokens?: number } },
+    ) => {
+      const response = await authFetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(arg),
+      })
+      if (!response.ok) throw new Error('Failed to update settings')
+      return response.json()
     },
   )
 }

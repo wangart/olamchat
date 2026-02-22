@@ -3,7 +3,13 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { useChatStore } from '../store/chat'
 import { useEffect, useRef, useState } from 'react'
 import { useConversationMessages, useConversations, useModels } from '@/hooks/api'
-import { logout, useCreateConversation, useCreateMessage, useEditConversation } from '@/lib/api'
+import {
+  logout,
+  useCreateConversation,
+  useCreateMessage,
+  useEditConversation,
+  useUpdateConversationSettings,
+} from '@/lib/api'
 import type { Message } from '@/types/api'
 import {
   MessageSquarePlusIcon,
@@ -15,6 +21,8 @@ import {
   SparklesIcon,
   Loader2Icon,
   ChevronDownIcon,
+  SettingsIcon,
+  SquareIcon,
 } from 'lucide-react'
 import { useStream } from '@/hooks/stream'
 
@@ -39,7 +47,7 @@ export default function Home() {
     streamingContent,
   } = useChatStore()
   const { data: conversations } = useConversations()
-  const { startStream, isStreaming } = useStream(activeId)
+  const { startStream, stopStream, isStreaming } = useStream(activeId)
   const [editConversationId, setEditConversationId] = useState<string | null>(null)
   const [editConversationTitle, setEditConversationTitle] = useState<string>('')
   const { data: messages } = useConversationMessages(activeId)
@@ -54,8 +62,29 @@ export default function Home() {
     error: editConversationError,
   } = useEditConversation()
   const { trigger: createMessage, isMutating: isSendingMessage } = useCreateMessage(activeId)
+  const { trigger: updateSettings } = useUpdateConversationSettings(activeId)
   const [newMessage, setNewMessage] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Settings panel state
+  const [showSettings, setShowSettings] = useState(false)
+  const [systemPrompt, setSystemPrompt] = useState('')
+  const [temperature, setTemperature] = useState(0.7)
+  const [maxTokens, setMaxTokens] = useState(2048)
+
+  const activeConversation = conversations?.find((c) => c.id === activeId)
+
+  // Sync settings state when switching conversations
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (activeConversation) {
+      setSystemPrompt(activeConversation.systemPrompt ?? '')
+      setTemperature(activeConversation.temperature ?? 0.7)
+      setMaxTokens(activeConversation.maxTokens ?? 2048)
+    }
+    setShowSettings(false)
+  }, [activeConversation?.id])
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   const startEditing = (c: { id: string; title: string }) => {
     setEditConversationId(c.id)
@@ -109,9 +138,9 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
-  const activeConversation = conversations?.find((c) => c.id === activeId)
   const isWaitingForResponse =
-    !!messages && messages.length > 0 && messages[messages.length - 1].role === 'user'
+    isStreaming ||
+    (!!messages && messages.length > 0 && messages[messages.length - 1].role === 'user')
 
   return (
     <div
@@ -276,7 +305,61 @@ export default function Home() {
               <h1 className="text-[15px] font-medium text-white/90">
                 {activeConversation?.title ?? 'Conversation'}
               </h1>
+              <button
+                onClick={() => setShowSettings(!showSettings)}
+                className={`ml-auto rounded-lg p-2 transition hover:bg-white/[.06] ${
+                  showSettings ? 'text-violet-400' : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                <SettingsIcon className="size-4" />
+              </button>
             </header>
+
+            {/* Settings panel */}
+            {showSettings && (
+              <div className="border-b border-white/[.06] px-6 py-4 space-y-4">
+                <div>
+                  <label className="text-xs text-white/50 mb-1 block">System Prompt</label>
+                  <textarea
+                    value={systemPrompt}
+                    onChange={(e) => setSystemPrompt(e.target.value)}
+                    onBlur={() => updateSettings({ systemPrompt: systemPrompt || null })}
+                    className="w-full rounded-lg border border-white/[.1] bg-white/[.04] px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-violet-500/40 focus:outline-none resize-none"
+                    rows={3}
+                    placeholder="You are a helpful assistant..."
+                  />
+                </div>
+                <div className="flex gap-6">
+                  <div className="flex-1">
+                    <label className="text-xs text-white/50 mb-1 block">
+                      Temperature: {temperature.toFixed(1)}
+                    </label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={2}
+                      step={0.1}
+                      value={temperature}
+                      onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                      onMouseUp={() => updateSettings({ temperature })}
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/50 mb-1 block">Max Tokens</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={16384}
+                      value={maxTokens}
+                      onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+                      onBlur={() => updateSettings({ maxTokens })}
+                      className="w-24 rounded-lg border border-white/[.1] bg-white/[.04] px-3 py-2 text-sm text-white focus:border-violet-500/40 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Messages */}
             <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-6 py-6">
@@ -332,11 +415,19 @@ export default function Home() {
                   />
                 </div>
                 <button
-                  className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={isSendingMessage || isWaitingForResponse || !newMessage.trim()}
-                  onClick={handleSend}
+                  className={`flex size-11 shrink-0 items-center justify-center rounded-xl text-white transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                    isStreaming
+                      ? 'bg-red-600 hover:bg-red-500'
+                      : 'bg-violet-600 hover:bg-violet-500'
+                  }`}
+                  disabled={
+                    !isStreaming && (isSendingMessage || isWaitingForResponse || !newMessage.trim())
+                  }
+                  onClick={isStreaming ? stopStream : handleSend}
                 >
-                  {isSendingMessage || isWaitingForResponse ? (
+                  {isStreaming ? (
+                    <SquareIcon className="size-4" />
+                  ) : isSendingMessage || isWaitingForResponse ? (
                     <Loader2Icon className="size-4.5 animate-spin" />
                   ) : (
                     <SendHorizontalIcon className="size-4.5" />

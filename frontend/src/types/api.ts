@@ -13,6 +13,8 @@ export interface Conversation {
   modelId: string | null
   userId: string
   systemPrompt: string | null
+  temperature: number
+  maxTokens: number
   createdAt: string
   updatedAt: string
 }

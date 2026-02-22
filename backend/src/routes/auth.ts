@@ -14,6 +14,12 @@ const authRoutes: FastifyPluginAsync = async (app) => {
     '/signup',
     {
       schema: { body: bodySchema },
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute',
+        },
+      },
     },
     async (request, reply) => {
       try {
@@ -33,6 +39,12 @@ const authRoutes: FastifyPluginAsync = async (app) => {
   }>(
     '/login',
     {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '1 minute',
+        },
+      },
       schema: { body: bodySchema },
     },
     async (request, reply) => {

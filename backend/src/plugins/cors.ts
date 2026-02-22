@@ -7,7 +7,7 @@ const corsPlugin: FastifyPluginAsync = async (app) => {
     origin: process.env.FRONTEND_URL
       ? process.env.FRONTEND_URL.split(',')
       : ['http://localhost:3000', 'http://127.0.0.1:3000'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   })
