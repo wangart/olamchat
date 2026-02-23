@@ -10,12 +10,16 @@ interface ChatCompletionResponse {
   }[]
 }
 
-const OLLAMA_URL = process.env.OLLAMA_URL!
+const LLM_BASE_URL = process.env.LLM_BASE_URL!
+const LLM_API_KEY = process.env.LLM_API_KEY ?? ''
 
 export async function chatCompletion(model: string, messages: ChatMessage[]): Promise<string> {
-  const res = await fetch(`${OLLAMA_URL}/v1/chat/completions`, {
+  const res = await fetch(`${LLM_BASE_URL}/v1/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(LLM_API_KEY && { Authorization: `Bearer ${LLM_API_KEY}` }),
+    },
     body: JSON.stringify({
       model,
       messages,
@@ -25,7 +29,7 @@ export async function chatCompletion(model: string, messages: ChatMessage[]): Pr
 
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(`Ollama error ${res.status}: ${text}`)
+    throw new Error(`LLM error ${res.status}: ${text}`)
   }
 
   const data: ChatCompletionResponse = await res.json()
@@ -43,9 +47,12 @@ export async function chatCompletionStream(
   onToken: (token: string) => void,
   options: ChatOptions = {},
 ): Promise<string> {
-  const res = await fetch(`${OLLAMA_URL}/v1/chat/completions`, {
+  const res = await fetch(`${LLM_BASE_URL}/v1/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(LLM_API_KEY && { Authorization: `Bearer ${LLM_API_KEY}` }),
+    },
     body: JSON.stringify({
       model,
       messages,
@@ -57,10 +64,10 @@ export async function chatCompletionStream(
 
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(`Ollama error ${res.status}: ${text}`)
+    throw new Error(`LLM error ${res.status}: ${text}`)
   }
 
-  // Ollama returns SSE-formatted chunks: "data: {...}\n\n"
+  // SSE-formatted chunks: "data: {...}\n\n"
   // We read the response body as a stream and parse each chunk
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()

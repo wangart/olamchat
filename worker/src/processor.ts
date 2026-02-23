@@ -1,6 +1,6 @@
 import { eq, asc } from 'drizzle-orm'
 import { db } from './db'
-import { messages, conversations } from '../../backend/src/db/schema'
+import { messages, conversations, models } from '../../backend/src/db/schema'
 import { chatCompletion, chatCompletionStream } from './ollama'
 import type { Job } from 'bullmq'
 import { publishToken, publishDone, publishError } from './redis'
@@ -16,10 +16,17 @@ export async function processInferenceJob(job: Job<InferenceJobData>) {
     `[worker:${process.pid}] Processing job ${job.id} for conversation ${job.data.conversationId}`,
   )
 
-  // 1. Fetch the conversation (for system prompt + settings)
+  // 1. Fetch the conversation with its model
   const [conversation] = await db
-    .select()
+    .select({
+      id: conversations.id,
+      systemPrompt: conversations.systemPrompt,
+      temperature: conversations.temperature,
+      maxTokens: conversations.maxTokens,
+      modelName: models.modelName,
+    })
     .from(conversations)
+    .leftJoin(models, eq(conversations.modelId, models.id))
     .where(eq(conversations.id, conversationId))
     .limit(1)
 
@@ -48,11 +55,9 @@ export async function processInferenceJob(job: Job<InferenceJobData>) {
     })
   }
 
-  // 4. Stream from Ollama, publishing each token to Redis
-  const model = 'qwen3:8b'
-  console.log(
-    `[worker] Streaming from Ollama with ${promptMessages.length} messages, model: ${model}`,
-  )
+  // 4. Stream from LLM, publishing each token to Redis
+  const model = conversation.modelName ?? 'stepfun/step-3.5-flash:free'
+  console.log(`[worker] Streaming from LLM with ${promptMessages.length} messages, model: ${model}`)
 
   try {
     const assistantContent = await chatCompletionStream(

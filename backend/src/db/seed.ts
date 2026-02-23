@@ -9,10 +9,13 @@ const db = drizzle(connection)
 async function seed() {
   console.log('Seeding database...')
 
-  await db.insert(models).values({
-    modelName: 'qwen3:8b',
-    modelDescription: 'Qwen 3 8B parameter model',
-  }).onConflictDoNothing({ target: models.modelName })
+  await db
+    .insert(models)
+    .values({
+      modelName: 'stepfun/step-3.5-flash:free',
+      modelDescription: 'StepFun Step 3.5 Flash (free via OpenRouter)',
+    })
+    .onConflictDoNothing({ target: models.modelName })
 
   console.log('Seeding complete.')
   await connection.end()
