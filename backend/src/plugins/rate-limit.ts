@@ -8,7 +8,7 @@ const rateLimitPlugin: FastifyPluginAsync = async (app) => {
     global: true,
     max: 100,
     timeWindow: '1 minute',
-    redis: new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379'),
+    redis: new Redis(process.env.REDIS_URL!),
   })
 }
 

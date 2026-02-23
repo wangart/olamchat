@@ -3,10 +3,10 @@ import { Worker } from 'bullmq'
 import { processInferenceJob } from './processor'
 import type { InferenceJobData } from './processor'
 
-const redisUrl = new URL(process.env.REDIS_URL ?? 'redis://localhost:6379')
+const redisUrl = new URL(process.env.REDIS_URL!)
 
 const worker = new Worker<InferenceJobData>(
-  'inference',  // must match queue name in backend/src/lib/queue.ts
+  'inference', // must match queue name in backend/src/lib/queue.ts
   processInferenceJob,
   {
     connection: {

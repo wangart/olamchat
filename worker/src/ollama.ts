@@ -10,7 +10,7 @@ interface ChatCompletionResponse {
   }[]
 }
 
-const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
+const OLLAMA_URL = process.env.OLLAMA_URL!
 
 export async function chatCompletion(model: string, messages: ChatMessage[]): Promise<string> {
   const res = await fetch(`${OLLAMA_URL}/v1/chat/completions`, {
