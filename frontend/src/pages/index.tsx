@@ -65,6 +65,7 @@ export default function Home() {
   const { trigger: updateSettings } = useUpdateConversationSettings(activeId)
   const [newMessage, setNewMessage] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   // Settings panel state
   const [showSettings, setShowSettings] = useState(false)
@@ -132,6 +133,7 @@ export default function Home() {
     )
     startStream()
     setNewMessage('')
+    setTimeout(() => inputRef.current?.focus(), 0)
   }
 
   useEffect(() => {
@@ -385,10 +387,27 @@ export default function Home() {
                   </div>
                 </div>
               ))}
-              {isStreaming && streamingContent && (
+              {isWaitingForResponse && (
                 <div className="flex justify-start mb-3">
                   <div className="max-w-[70%] rounded-2xl rounded-bl-md bg-white/[.06] text-white/85 px-4 py-3 text-[14px] leading-relaxed">
-                    <p className="whitespace-pre-wrap">{streamingContent}</p>
+                    {streamingContent ? (
+                      <p className="whitespace-pre-wrap">{streamingContent}</p>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="size-1.5 rounded-full bg-white/40 animate-bounce"
+                          style={{ animationDelay: '0ms' }}
+                        />
+                        <div
+                          className="size-1.5 rounded-full bg-white/40 animate-bounce"
+                          style={{ animationDelay: '150ms' }}
+                        />
+                        <div
+                          className="size-1.5 rounded-full bg-white/40 animate-bounce"
+                          style={{ animationDelay: '300ms' }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -400,11 +419,11 @@ export default function Home() {
               <div className="mx-auto flex max-w-3xl items-end gap-3">
                 <div className="relative flex-1">
                   <input
+                    ref={inputRef}
                     type="text"
                     placeholder={isWaitingForResponse ? 'Waiting for response…' : 'Type a message…'}
                     className="w-full rounded-xl border border-white/[.1] bg-white/[.04] px-4 py-3 text-[14px] text-white placeholder:text-white/30 transition focus:border-violet-500/40 focus:bg-white/[.06] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                     value={newMessage}
-                    disabled={isWaitingForResponse}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
